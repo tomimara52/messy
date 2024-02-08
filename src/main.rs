@@ -15,6 +15,7 @@ fn main() {
     if server_mode {
         let mut server = Server::new(HOST);
         server.listen();
+        server.handle_requests();
     } else {
         let mut client = Client::new(HOST, &args[1]);
         client.connect();
