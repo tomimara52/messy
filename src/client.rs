@@ -68,7 +68,7 @@ impl Client {
                 if request.starts_with("SENT ") {
                     let mut request_words = request.split(' ');
                     let nick = request_words.nth(1).unwrap();
-                    let msg: String = request_words.collect();
+                    let msg = &request[4+nick.len()+2..];
 
                     println!("{nick}: {msg}");
                 } else if request.starts_with("INTRODUCE ") {
