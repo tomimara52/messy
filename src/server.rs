@@ -25,7 +25,13 @@ impl Server {
     }
 
     pub fn listen(&mut self) {
-        let listener = self.listener.take().unwrap();
+        let listener = match self.listener.take() {
+            Some(l) => l,
+            None => {
+                println!("Error: server was already set up to listen.");
+                return;
+            }
+        };
 
         thread::spawn(move || {
             listener.listen();
