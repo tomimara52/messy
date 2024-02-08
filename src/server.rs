@@ -39,20 +39,30 @@ impl Server {
                         let nick = request.split(' ').nth(1).unwrap();
                         let stream = stream.try_clone().unwrap();
 
-                        clients
-                            .lock()
-                            .unwrap()
-                            .push(Client::from_stream(nick, stream));
+                        let mut clients = clients.lock().unwrap();
+
+                        clients.push(Client::from_stream(nick, stream));
+
+                        announce_connected(&mut clients, nick);
 
                         println!("{nick} connected.");
                     } else if request.starts_with("SEND ") {
                         let msg = &request[5..];
+                        let mut clients = clients.lock().unwrap();
 
-                        send_messages(&mut clients.lock().unwrap(), addr, msg);
+                        send_messages(&mut clients, addr, msg);
                     }
                 }
             });
         }
+    }
+}
+
+fn announce_connected(clients: &mut Vec<Client>, nick: &str) {
+    let msg = String::from("INTRODUCE ") + nick + "\n";
+
+    for client in clients {
+        client.write_stream(msg.as_bytes()).unwrap();
     }
 }
 

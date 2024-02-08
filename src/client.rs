@@ -71,6 +71,13 @@ impl Client {
                     let msg: String = request_words.collect();
 
                     println!("{nick}: {msg}");
+                } else if request.starts_with("INTRODUCE ") {
+                    let nick = match request.split(' ').nth(1) {
+                        Some(s) => s,
+                        None => continue
+                    };
+
+                    println!("{nick} connected to the server.");
                 }
             }
         });
