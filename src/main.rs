@@ -1,10 +1,10 @@
 use std::env;
 
-mod server;
 mod client;
+mod server;
 
-use server::Server;
 use client::Client;
+use server::Server;
 
 const HOST: &str = "127.0.0.1:8042";
 

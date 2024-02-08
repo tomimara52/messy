@@ -1,7 +1,7 @@
-use std::net::{SocketAddr, TcpListener};
 use std::io::{BufRead, BufReader};
-use std::thread;
+use std::net::{SocketAddr, TcpListener};
 use std::sync::{Arc, Mutex};
+use std::thread;
 
 use crate::Client;
 
@@ -9,14 +9,17 @@ use crate::Client;
 
 pub struct Server {
     listener: TcpListener,
-    clients: Arc<Mutex<Vec<Client>>>
+    clients: Arc<Mutex<Vec<Client>>>,
 }
 
 impl Server {
     pub fn new(addr: &str) -> Server {
         let listener = TcpListener::bind(addr).unwrap();
 
-        Server{ listener, clients: Arc::new(Mutex::new(vec![])) }
+        Server {
+            listener,
+            clients: Arc::new(Mutex::new(vec![])),
+        }
     }
 
     pub fn listen(&mut self) {
@@ -27,9 +30,7 @@ impl Server {
             thread::spawn(move || {
                 let buf_reader = BufReader::new(stream.try_clone().unwrap());
 
-                let requests = buf_reader
-                    .lines()
-                    .map(|l| l.unwrap());
+                let requests = buf_reader.lines().map(|l| l.unwrap());
 
                 for request in requests {
                     println!("Received: {:#?}", request);
@@ -38,8 +39,10 @@ impl Server {
                         let nick = request.split(' ').nth(1).unwrap();
                         let stream = stream.try_clone().unwrap();
 
-                        clients.lock().unwrap().push(
-                            Client::from_stream(nick, stream));
+                        clients
+                            .lock()
+                            .unwrap()
+                            .push(Client::from_stream(nick, stream));
 
                         println!("{nick} connected.");
                     } else if request.starts_with("SEND ") {
@@ -51,28 +54,21 @@ impl Server {
             });
         }
     }
-
 }
 
-fn send_messages(
-    clients: &mut Vec<Client>,
-    sender_addr: SocketAddr,
-    msg: &str
-) {
+fn send_messages(clients: &mut Vec<Client>, sender_addr: SocketAddr, msg: &str) {
     let same_address = |c: &Client| c.peer_addr().unwrap() == sender_addr;
     let sender_index = match clients.iter().position(same_address) {
-            None => {
-                println!("Unrecognized client");
-                return;
-            },
-            Some(i) => i
+        None => {
+            println!("Unrecognized client");
+            return;
+        }
+        Some(i) => i,
     };
-    
+
     let sender_nick = clients[sender_index].nick();
 
-    let msg = String::from("SENT ") +
-        &String::from(sender_nick) +
-        " " + msg + "\n";
+    let msg = String::from("SENT ") + &String::from(sender_nick) + " " + msg + "\n";
 
     let mut to_delete = vec![];
 
@@ -91,4 +87,3 @@ fn send_messages(
         clients.remove(i);
     }
 }
-
