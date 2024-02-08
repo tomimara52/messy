@@ -48,6 +48,9 @@ impl Client {
         while message.trim() != "!quit" {
             message.clear();
 
+            print!("{}> ", self.nick);
+            io::stdout().flush().unwrap();
+
             stdin().read_line(&mut message).unwrap();
 
             let request = String::from("SEND ") + &message;
@@ -58,6 +61,7 @@ impl Client {
 
     fn listen(&mut self) {
         let stream = self.stream.try_clone().unwrap();
+        let client_nick = self.nick.clone();
 
         thread::spawn(move || loop {
             let buf_reader = BufReader::new(&stream);
@@ -70,16 +74,25 @@ impl Client {
                     let nick = request_words.nth(1).unwrap();
                     let msg = &request[4+nick.len()+2..];
 
-                    println!("{nick}: {msg}");
+                    println!("\r\x1b[K{nick}: {msg}");
+                    print!("{}> ", client_nick);
+                    io::stdout().flush().unwrap();
                 } else if request.starts_with("INTRODUCE ") {
                     let nick = match request.split(' ').nth(1) {
                         Some(s) => s,
                         None => continue
                     };
 
-                    println!("{nick} connected to the server.");
+                    println!("\r\x1b[K{nick} connected to the server.");
+
+                    if nick != client_nick {
+                        print!("{}> ", client_nick);
+                        io::stdout().flush().unwrap();
+                    }
                 }
             }
         });
+
+        thread::sleep(std::time::Duration::from_millis(250));
     }
 }
