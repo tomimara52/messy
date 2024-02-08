@@ -6,21 +6,23 @@ use std::thread;
 pub struct Client {
     stream: TcpStream,
     nick: String,
+    addr: SocketAddr
 }
 
 impl Client {
     pub fn new(addr: &str, nick: &str) -> Client {
         let stream = TcpStream::connect(addr).unwrap();
-
         let nick = String::from(nick);
+        let addr = stream.peer_addr().unwrap();
 
-        Client { stream, nick }
+        Client { stream, nick, addr }
     }
 
     pub fn from_stream(nick: &str, stream: TcpStream) -> Client {
         let nick = String::from(nick);
+        let addr = stream.peer_addr().unwrap();
 
-        Client { nick, stream }
+        Client { stream, nick, addr }
     }
 
     pub fn connect(&mut self) {
@@ -38,8 +40,8 @@ impl Client {
         self.stream.write(buf)
     }
 
-    pub fn peer_addr(&self) -> Result<SocketAddr, io::Error> {
-        self.stream.peer_addr()
+    pub fn peer_addr(&self) -> SocketAddr {
+        self.addr
     }
 
     fn input_loop(&mut self) {

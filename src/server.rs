@@ -5,8 +5,6 @@ use std::thread;
 
 use crate::Client;
 
-//const CLIENT_PORT: u16 = 8043;
-
 pub struct Server {
     listener: Option<Listener>,
     receiver: Receiver<(String, TcpStream)>,
@@ -68,7 +66,7 @@ impl Server {
     }
 
     fn send_messages(&mut self, sender_addr: SocketAddr, msg: &str) {
-        let same_address = |c: &Client| c.peer_addr().unwrap() == sender_addr;
+        let same_address = |c: &Client| c.peer_addr() == sender_addr;
         let sender_index = match self.clients.iter().position(same_address) {
             None => {
                 println!("Unrecognized client");
