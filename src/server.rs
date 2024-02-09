@@ -29,7 +29,7 @@ impl Server {
         }
     }
 
-    pub fn listen(&mut self) {
+    pub fn start(&mut self) {
         let listener = match self.listener.take() {
             Some(l) => l,
             None => {
@@ -41,11 +41,12 @@ impl Server {
         thread::spawn(move || {
             listener.listen();
         });
+
+        self.receive_requests();
     }
 
-    pub fn handle_requests(&mut self) {
+    fn receive_requests(&mut self) {
         loop {
-            //let (request, stream) = self.receiver.recv().unwrap();
             let (request, stream) = match self.receiver.try_recv() {
                 Ok(t) => t,
                 Err(_) => {
