@@ -59,6 +59,21 @@ impl Server {
                 let addr = stream.peer_addr().unwrap();
 
                 self.send_messages(addr, msg);
+            } else if request == "DISCONNECT" {
+                let addr = stream.peer_addr().unwrap();
+                
+                let pos = self
+                    .clients
+                    .iter()
+                    .position(|c: &Client| c.peer_addr() == addr)
+                    .unwrap();
+
+                self.clients.remove(pos);
+            }
+
+            if self.clients.len() == 0 {
+                println!("Bye");
+                break;
             }
         }
     }
