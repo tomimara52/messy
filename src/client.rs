@@ -47,13 +47,17 @@ impl Client {
     fn input_loop(&mut self) {
         let mut message = String::new();
 
-        while message.trim() != "!quit" {
+        loop {
             message.clear();
 
             print!("{}> ", self.nick);
             io::stdout().flush().unwrap();
 
             stdin().read_line(&mut message).unwrap();
+
+            if message.trim() == "!quit" {
+                break;
+            }
 
             let request = String::from("SEND ") + &message;
 
