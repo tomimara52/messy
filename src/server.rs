@@ -142,6 +142,8 @@ impl Listener {
                     let stream = stream.try_clone().unwrap();
                     sender.send((request, stream)).unwrap();
                 }
+
+                sender.send((String::from("DISCONNECT"), stream)).unwrap();
             });
         }
     }
