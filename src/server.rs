@@ -2,13 +2,17 @@ use std::io::{BufRead, BufReader};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
+use std::time::Instant;
 
 use crate::Client;
+
+const MAX_INACTIVITY: u64 = 5;
 
 pub struct Server {
     listener: Option<Listener>,
     receiver: Receiver<(String, TcpStream)>,
-    clients: Vec<Client>
+    clients: Vec<Client>,
+    last_check: Instant
 }
 
 impl Server {
@@ -21,6 +25,7 @@ impl Server {
             listener,
             receiver,
             clients: vec![],
+            last_check: Instant::now()
         }
     }
 
@@ -40,7 +45,19 @@ impl Server {
 
     pub fn handle_requests(&mut self) {
         loop {
-            let (request, stream) = self.receiver.recv().unwrap();
+            //let (request, stream) = self.receiver.recv().unwrap();
+            let (request, stream) = match self.receiver.try_recv() {
+                Ok(t) => t,
+                Err(_) => {
+                    if self.last_check.elapsed().as_secs() > MAX_INACTIVITY
+                        && self.clients.len() == 0 {
+                        println!("Bye");
+                        break;
+                    } else {
+                        continue;
+                    }
+                }
+            };
 
             println!("Request: {:#?}", request);
             println!("Stream: {:#?}", stream);
@@ -71,10 +88,8 @@ impl Server {
                 self.clients.remove(pos);
             }
 
-            if self.clients.len() == 0 {
-                println!("Bye");
-                break;
-            }
+            self.last_check = Instant::now();
+
         }
     }
 
