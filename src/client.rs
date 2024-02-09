@@ -59,6 +59,8 @@ impl Client {
 
             self.stream.write(request.as_bytes()).unwrap();
         }
+
+        self.stream.write("DISCONNECT".as_bytes()).unwrap();
     }
 
     fn listen(&mut self) {
