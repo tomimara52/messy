@@ -72,9 +72,6 @@ impl Server {
                 Err(ServerError::ClientDisconnected) => {
                     println!("Client disconnected");
                 },
-                Err(ServerError::UnknownClient) => {
-                    println!("Unknown client");
-                },
                 _ => {}
             }
 
@@ -113,16 +110,22 @@ impl Server {
             let msg = &request[5..];
 
             self.send_client_message(addr, msg);
-        } else if request == "DISCONNECT" {
+        } else if request.starts_with("DISCONNECT") {
             let pos = match self
                 .clients
                 .iter()
                 .position(|c: &Client| c.peer_addr() == addr) {
                     Some(i) => i,
-                    None => return Err(ServerError::UnknownClient)
+                    None => return Ok(())
             };
 
-            self.announce_disconnected(addr);
+            let mut msg = "";
+
+            if request.len() > 11 {
+                msg = &request[11..];
+            }
+
+            self.announce_disconnected(addr, msg);
 
             self.clients.remove(pos);
         } else {
@@ -132,7 +135,7 @@ impl Server {
         Ok(())
     }
 
-    fn announce_disconnected(&mut self, addr: SocketAddr) {
+    fn announce_disconnected(&mut self, addr: SocketAddr, msg: &str) {
         let index = match self.client_index(addr) {
             Some(i) => i,
             None => return
@@ -140,7 +143,7 @@ impl Server {
 
         let nick = self.clients[index].nick();
 
-        let msg = String::from("GOODBYE ") + nick + "\n";
+        let msg = String::from("GOODBYE ") + nick + " " + msg + "\n";
 
         for client in self.clients.iter_mut() {
             client.write_stream(msg.as_bytes()).unwrap();
@@ -210,9 +213,14 @@ impl Listener {
             thread::spawn(move || {
                 let buf_reader = BufReader::new(stream.try_clone().unwrap());
 
-                let requests = buf_reader.lines().map(|l| l.unwrap());
+                let requests = buf_reader.lines();
 
                 for request in requests {
+                    let request = match request {
+                        Ok(r) => r,
+                        Err(_) => break
+                    };
+
                     let stream = stream.try_clone().unwrap();
 
                     let packet = ChannelPacket {
@@ -230,7 +238,7 @@ impl Listener {
                     addr
                 };
 
-                sender.send(packet).unwrap();
+                sender.send(packet).ok();
             });
         }
     }
@@ -245,5 +253,4 @@ struct ChannelPacket {
 enum ServerError {
     ClientDisconnected,
     InvalidRequest,
-    UnknownClient
 }

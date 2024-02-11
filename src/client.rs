@@ -55,7 +55,13 @@ impl Client {
 
             stdin().read_line(&mut message).unwrap();
 
-            if message.trim() == "!quit" {
+            if message.trim().starts_with("!quit") {
+                message.replace_range(
+                    0..5,
+                    "DISCONNECT"
+                );
+
+                self.stream.write(message.as_bytes()).unwrap();
                 break;
             }
 
@@ -97,12 +103,22 @@ impl Client {
                         io::stdout().flush().unwrap();
                     }
                 } else if request.starts_with("GOODBYE ") {
-                    let nick = match request.split(' ').nth(1) {
+                    let mut request_words = request.split(' ');
+                    
+                    let nick = match request_words.nth(1) {
                         Some(s) => s,
                         None => continue
                     };
 
-                    println!("\r\x1b[K{nick} disconnected from the server.");
+                    match request_words.next() {
+                        Some(s) if s != "" => {
+                            println!("\r\x1b[K{nick} disconnected with message: {s}.");
+                        },
+                        None|Some(_) => { 
+                            println!("\r\x1b[K{nick} disconnected from the server.");
+                        }
+                    };
+
                     print!("{}> ", client_nick);
                     io::stdout().flush().unwrap();
                 }
