@@ -96,6 +96,15 @@ impl Client {
                         print!("{}> ", client_nick);
                         io::stdout().flush().unwrap();
                     }
+                } else if request.starts_with("GOODBYE ") {
+                    let nick = match request.split(' ').nth(1) {
+                        Some(s) => s,
+                        None => continue
+                    };
+
+                    println!("\r\x1b[K{nick} disconnected from the server.");
+                    print!("{}> ", client_nick);
+                    io::stdout().flush().unwrap();
                 }
             }
         });

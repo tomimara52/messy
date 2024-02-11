@@ -10,7 +10,7 @@ const MAX_INACTIVITY: u64 = 5;
 
 pub struct Server {
     listener: Option<Listener>,
-    receiver: Receiver<(String, TcpStream)>,
+    receiver: Receiver<ChannelPacket>,
     clients: Vec<Client>,
     last_check: Instant
 }
@@ -47,7 +47,9 @@ impl Server {
 
     fn receive_requests(&mut self) {
         loop {
-            let (request, stream) = match self.receiver.try_recv() {
+            let rec = self.receiver.try_recv();
+            
+            let ChannelPacket { request, stream, addr } = match rec {
                 Ok(t) => t,
                 Err(_) => {
                     if self.last_check.elapsed().as_secs() > MAX_INACTIVITY
@@ -63,34 +65,85 @@ impl Server {
             println!("Request: {:#?}", request);
             println!("Stream: {:#?}", stream);
 
-            if request.starts_with("CONNECT ") {
-                let nick = request.split(' ').nth(1).unwrap();
-                let stream = stream.try_clone().unwrap();
-
-                self.clients.push(Client::from_stream(nick, stream));
-
-                self.announce_connected(nick);
-
-                println!("{nick} connected.");
-            } else if request.starts_with("SEND ") {
-                let msg = &request[5..];
-                let addr = stream.peer_addr().unwrap();
-
-                self.send_messages(addr, msg);
-            } else if request == "DISCONNECT" {
-                let addr = stream.peer_addr().unwrap();
-                
-                let pos = self
-                    .clients
-                    .iter()
-                    .position(|c: &Client| c.peer_addr() == addr)
-                    .unwrap();
-
-                self.clients.remove(pos);
+            match self.process_request(&request, stream, addr) {
+                Err(ServerError::InvalidRequest) => {
+                    println!("Invalid request received");
+                },
+                Err(ServerError::ClientDisconnected) => {
+                    println!("Client disconnected");
+                },
+                Err(ServerError::UnknownClient) => {
+                    println!("Unknown client");
+                },
+                _ => {}
             }
 
             self.last_check = Instant::now();
 
+        }
+    }
+
+    fn process_request(
+        &mut self,
+        request: &str,
+        stream: TcpStream,
+        addr: SocketAddr
+    ) -> Result<(), ServerError> {
+        if request.starts_with("CONNECT ") {
+            let nick = match request.split(' ').nth(1) {
+                Some(s) => s,
+                None => return Err(ServerError::InvalidRequest)
+            };
+            
+            let stream = match stream.try_clone() {
+                Ok(s) => s,
+                Err(_) => return Err(ServerError::ClientDisconnected)
+            };
+
+            self.clients.push(Client::from_stream(nick, stream));
+
+            self.announce_connected(nick);
+
+            println!("{nick} connected.");
+        } else if request.starts_with("SEND ") {
+            if request.len() < 6 {
+                return Err(ServerError::InvalidRequest);
+            }
+            
+            let msg = &request[5..];
+
+            self.send_client_message(addr, msg);
+        } else if request == "DISCONNECT" {
+            let pos = match self
+                .clients
+                .iter()
+                .position(|c: &Client| c.peer_addr() == addr) {
+                    Some(i) => i,
+                    None => return Err(ServerError::UnknownClient)
+            };
+
+            self.announce_disconnected(addr);
+
+            self.clients.remove(pos);
+        } else {
+            return Err(ServerError::InvalidRequest);
+        }
+
+        Ok(())
+    }
+
+    fn announce_disconnected(&mut self, addr: SocketAddr) {
+        let index = match self.client_index(addr) {
+            Some(i) => i,
+            None => return
+        };
+
+        let nick = self.clients[index].nick();
+
+        let msg = String::from("GOODBYE ") + nick + "\n";
+
+        for client in self.clients.iter_mut() {
+            client.write_stream(msg.as_bytes()).unwrap();
         }
     }
 
@@ -102,9 +155,8 @@ impl Server {
         }
     }
 
-    fn send_messages(&mut self, sender_addr: SocketAddr, msg: &str) {
-        let same_address = |c: &Client| c.peer_addr() == sender_addr;
-        let sender_index = match self.clients.iter().position(same_address) {
+    fn send_client_message(&mut self, sender_addr: SocketAddr, msg: &str) {
+        let sender_index = match self.client_index(sender_addr) {
             None => {
                 println!("Unrecognized client");
                 return;
@@ -120,7 +172,7 @@ impl Server {
         let mut to_delete = vec![];
 
         for (i, client) in self.clients.iter_mut().enumerate() {
-            if same_address(client) {
+            if client.peer_addr() == sender_addr {
                 continue;
             }
 
@@ -134,19 +186,25 @@ impl Server {
             self.clients.remove(i);
         }
     }
+
+    fn client_index(&self, client_addr: SocketAddr) -> Option<usize> {
+        let same_address = |c: &Client| c.peer_addr() == client_addr;
+
+        self.clients.iter().position(same_address)
+    }
 }
 
 
 
 struct Listener {
     listener: TcpListener,
-    sender: Sender<(String, TcpStream)>
+    sender: Sender<ChannelPacket>
 }
 
 impl Listener {
     fn listen(&self) {
         loop {
-            let (stream, _) = self.listener.accept().unwrap();
+            let (stream, addr) = self.listener.accept().unwrap();
             let sender = self.sender.clone();
 
             thread::spawn(move || {
@@ -156,11 +214,36 @@ impl Listener {
 
                 for request in requests {
                     let stream = stream.try_clone().unwrap();
-                    sender.send((request, stream)).unwrap();
+
+                    let packet = ChannelPacket {
+                        request,
+                        stream,
+                        addr
+                    };
+
+                    sender.send(packet).unwrap();
                 }
 
-                sender.send((String::from("DISCONNECT"), stream)).unwrap();
+                let packet = ChannelPacket {
+                    request: String::from("DISCONNECT"),
+                    stream,
+                    addr
+                };
+
+                sender.send(packet).unwrap();
             });
         }
     }
+}
+
+struct ChannelPacket {
+    request: String,
+    stream: TcpStream,
+    addr: SocketAddr
+}
+
+enum ServerError {
+    ClientDisconnected,
+    InvalidRequest,
+    UnknownClient
 }
