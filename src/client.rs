@@ -11,7 +11,7 @@ pub struct Client {
 
 impl Client {
     pub fn new(addr: &str, nick: &str) -> Client {
-        let stream = TcpStream::connect(addr).unwrap();
+        let stream = TcpStream::connect(addr).expect("Host not found");
         let nick = String::from(nick);
         let addr = stream.peer_addr().unwrap();
 
