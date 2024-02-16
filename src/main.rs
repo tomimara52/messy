@@ -6,7 +6,6 @@ mod server;
 use client::Client;
 use server::Server;
 
-const HOST: &str = "127.0.0.1:8042";
 const PORT: &str = "8042";
 
 fn main() {
@@ -14,7 +13,10 @@ fn main() {
     let server_mode = is_server(&mut args);
 
     if server_mode {
-        let mut server = Server::new(HOST);
+        let host = local_ip_address::local_ip().unwrap().to_string()
+            + ":"
+            + PORT;
+        let mut server = Server::new(&host);
         server.start();
     } else {
         let nick = match args.get(1) {
