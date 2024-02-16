@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use crate::Client;
 
-const MAX_INACTIVITY: u64 = 5;
+const MAX_INACTIVITY: u64 = 300;
 
 pub struct Server {
     listener: Option<Listener>,
