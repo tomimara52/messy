@@ -7,6 +7,7 @@ use client::Client;
 use server::Server;
 
 const HOST: &str = "127.0.0.1:8042";
+const PORT: &str = "8042";
 
 fn main() {
     let mut args: Vec<_> = env::args().collect();
@@ -16,7 +17,25 @@ fn main() {
         let mut server = Server::new(HOST);
         server.start();
     } else {
-        let mut client = Client::new(HOST, &args[1]);
+        let nick = match args.get(1) {
+            Some(n) => n,
+            None => {
+                println!("You have to provide a nickname.");
+                std::process::exit(1);
+            }
+        };
+
+        let host = match args.get(2) {
+            Some(n) => n,
+            None => {
+                println!("You have to provide a host ip.");
+                std::process::exit(1);
+            }
+        };
+
+        let host = host.to_string() + ":" + PORT;
+
+        let mut client = Client::new(&host, nick);
         client.connect();
     }
 }
