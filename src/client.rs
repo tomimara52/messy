@@ -67,6 +67,16 @@ impl Client {
                     break;
                 }
 
+                if buf[0] == 127 {
+                    if !message.is_empty() {
+                        message.pop();
+                        let b = 8 as char;
+                        write!(stdout(), "{b} {b}").unwrap();
+                        stdout().flush().unwrap();
+                    }
+                    continue;
+                }
+
                 message.push(buf[0] as char);
 
                 tx.send(message.clone()).unwrap();
