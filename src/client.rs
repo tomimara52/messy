@@ -50,7 +50,7 @@ impl Client {
     fn input_loop(&mut self, tx: Sender<String>) {
         let mut message = String::new();
 
-        loop {
+        'outer: loop {
             message.clear();
             tx.send(String::new()).unwrap();
 
@@ -75,6 +75,11 @@ impl Client {
                         stdout().flush().unwrap();
                     }
                     continue;
+                }
+
+                if buf[0] == 3 {
+                    disable_raw_mode().unwrap();
+                    break 'outer;
                 }
 
                 message.push(buf[0] as char);
