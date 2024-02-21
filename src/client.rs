@@ -51,12 +51,6 @@ impl Client {
         let mut message = String::new();
 
         'outer: loop {
-            message.clear();
-            tx.send(String::new()).unwrap();
-
-            print!("\r\n{}> ", self.nick);
-            stdout().flush().unwrap();
-
             let mut buf: [u8; 1] = [0];
             enable_raw_mode().unwrap();
 
@@ -111,6 +105,12 @@ impl Client {
             let request = String::from("SEND ") + &message;
 
             self.stream.write(request.as_bytes()).unwrap();
+
+            message.clear();
+            tx.send(String::new()).unwrap();
+
+            print!("\r\n{}> ", self.nick);
+            stdout().flush().unwrap();
         }
 
         println!("");
@@ -134,8 +134,6 @@ impl Client {
                     let msg = &request[4+nick.len()+2..];
 
                     writeln(format!("\r\x1b[K{nick}: {msg}"));
-                    print!("{}> ", client_nick);
-                    stdout().flush().unwrap();
                 } else if request.starts_with("INTRODUCE ") {
                     let nick = match request.split(' ').nth(1) {
                         Some(s) => s,
@@ -143,11 +141,6 @@ impl Client {
                     };
 
                     writeln(format!("\r\x1b[K{nick} connected to the server."));
-
-                    if nick != client_nick {
-                        print!("{}> ", client_nick);
-                        stdout().flush().unwrap();
-                    }
                 } else if request.starts_with("GOODBYE ") {
                     let mut request_words = request.split(' ');
                     
@@ -167,10 +160,13 @@ impl Client {
 
                     writeln(msg);
 
-                    print!("{}> ", client_nick);
-                    stdout().flush().unwrap();
                 }
 
+                // print prompt again
+                print!("{}> ", client_nick);
+                stdout().flush().unwrap();
+
+                // get the message the user was typing
                 loop {
                     match rx.try_recv() {
                         Ok(s) => message = s,
@@ -178,8 +174,7 @@ impl Client {
                     }
                 };
 
-                // if the user was typing something when the request arrived
-                // then print what was being typed
+                // print the message the user was typing
                 print!("{}", message);
                 stdout().flush().unwrap();
             }
