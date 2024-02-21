@@ -63,10 +63,12 @@ impl Client {
             loop { 
                 stdin().read(&mut buf).unwrap();
 
+                // handle pressing ENTER
                 if buf[0] == 10 || buf[0] == 13 {
                     break;
                 }
 
+                // handle pressing BACKSPACE
                 if buf[0] == 127 {
                     if !message.is_empty() {
                         message.pop();
@@ -77,11 +79,13 @@ impl Client {
                     continue;
                 }
 
+                // handle pressing CTRL-C
                 if buf[0] == 3 {
                     disable_raw_mode().unwrap();
                     break 'outer;
                 }
 
+                // handle rest of characters
                 message.push(buf[0] as char);
 
                 tx.send(message.clone()).unwrap();
@@ -174,6 +178,8 @@ impl Client {
                     }
                 };
 
+                // if the user was typing something when the request arrived
+                // then print what was being typed
                 print!("{}", message);
                 stdout().flush().unwrap();
             }
