@@ -111,12 +111,9 @@ impl Server {
 
             self.send_client_message(addr, msg);
         } else if request.starts_with("DISCONNECT") {
-            let pos = match self
-                .clients
-                .iter()
-                .position(|c: &Client| c.peer_addr() == addr) {
-                    Some(i) => i,
-                    None => return Ok(())
+            let pos = match self.client_index(addr) {
+                Some(i) => i,
+                None => return Ok(())
             };
 
             let mut msg = "";
@@ -125,7 +122,7 @@ impl Server {
                 msg = &request[11..];
             }
 
-            self.announce_disconnected(addr, msg);
+            self.announce_disconnected(pos, msg);
 
             self.clients.remove(pos);
         } else {
@@ -135,26 +132,39 @@ impl Server {
         Ok(())
     }
 
-    fn announce_disconnected(&mut self, addr: SocketAddr, msg: &str) {
-        let index = match self.client_index(addr) {
-            Some(i) => i,
-            None => return
-        };
-
+    fn announce_disconnected(&mut self, index: usize, msg: &str) {
         let nick = self.clients[index].nick();
 
         let msg = String::from("GOODBYE ") + nick + " " + msg + "\n";
 
-        for client in self.clients.iter_mut() {
-            client.write_stream(msg.as_bytes()).unwrap();
+        let mut to_delete = Vec::with_capacity(self.clients.len());
+        
+        for (i, client) in self.clients.iter_mut().enumerate() {
+            if let Err(_) = client.write_stream(msg.as_bytes()) {
+                if i != index {
+                    to_delete.push(i); 
+                }
+            }
+        }
+
+        for i in to_delete {
+            self.clients.remove(i);
         }
     }
 
     fn announce_connected(&mut self, nick: &str) {
         let msg = String::from("INTRODUCE ") + nick + "\n";
 
-        for client in self.clients.iter_mut() {
-            client.write_stream(msg.as_bytes()).unwrap();
+        let mut to_delete = Vec::with_capacity(self.clients.len());
+
+        for (i, client) in self.clients.iter_mut().enumerate() {
+            if let Err(_) = client.write_stream(msg.as_bytes()) {
+                to_delete.push(i);
+            }
+        }
+
+        for i in to_delete {
+            self.clients.remove(i);
         }
     }
 
