@@ -129,70 +129,87 @@ impl Client {
     fn listen(&mut self, rx: Receiver<String>) {
         let stream = self.stream.try_clone().unwrap();
         let client_nick = self.nick.clone();
-        let mut message = String::new();
 
-        thread::spawn(move || loop {
-            let buf_reader = BufReader::new(&stream);
-
-            let requests = buf_reader.lines().map(|l| l.unwrap());
-
-            for request in requests {
-                if request.starts_with("SENT ") {
-                    let mut request_words = request.split(' ');
-                    let nick = request_words.nth(1).unwrap();
-                    let msg = &request[4+nick.len()+2..];
-
-                    writeln(format!("\r\x1b[K{nick}: {msg}"));
-                } else if request.starts_with("INTRODUCE ") {
-                    let nick = match request.split(' ').nth(1) {
-                        Some(s) => s,
-                        None => continue
-                    };
-
-                    writeln(format!("\r\x1b[K{nick} connected to the server."));
-                } else if request.starts_with("GOODBYE ") {
-                    let mut request_words = request.split(' ');
-                    
-                    let nick = match request_words.nth(1) {
-                        Some(s) => s,
-                        None => continue
-                    };
-
-                    let msg = match request_words.next() {
-                        Some(s) if s != "" => {
-                            format!("\r\x1b[K{nick} disconnected with message: {s}.")
-                        },
-                        None|Some(_) => { 
-                            format!("\r\x1b[K{nick} disconnected from the server.")
-                        }
-                    };
-
-                    writeln(msg);
-
+        thread::spawn(move || {
+            if let Err(e) = listen_function(stream, client_nick, rx) {
+                if is_raw_mode_enabled().expect("Error checking if raw mode is enabled.") {
+                    disable_raw_mode().expect("Error disabling raw mode.");
                 }
 
-                // print prompt again
-                print!("{}> ", client_nick);
-                stdout().flush().unwrap();
-
-                // get the message the user was typing
-                loop {
-                    match rx.try_recv() {
-                        Ok(s) => message = s,
-                        Err(_) => break
-                    }
-                };
-
-                // print the message the user was typing
-                print!("{}", message);
-                stdout().flush().unwrap();
+                println!("Listener loop failed with: {e}.");
+                std::process::exit(1);
             }
         });
 
-        thread::sleep(std::time::Duration::from_millis(250));
     }
 }
 
-fn writeln(s: String) {
-    write!(stdout(), "{s}\r\n").unwrap();
+fn writeln(s: String) -> Result<(), io::Error> {
+    write!(stdout(), "{s}\r\n")
+}
+
+fn listen_function(
+    stream: TcpStream,
+    client_nick: String,
+    rx: Receiver<String>
+) -> Result<(), Box<dyn Error>> {
+    let mut message = String::new();
+    
+    loop {
+        let buf_reader = BufReader::new(&stream);
+
+        let requests = buf_reader.lines().map(|l| l.unwrap());
+
+        for request in requests {
+            if request.starts_with("SENT ") {
+                let mut request_words = request.split(' ');
+                let nick = request_words.nth(1).unwrap();
+                let msg = &request[4+nick.len()+2..];
+
+                writeln(format!("\r\x1b[K{nick}: {msg}"))?;
+            } else if request.starts_with("INTRODUCE ") {
+                let nick = match request.split(' ').nth(1) {
+                    Some(s) => s,
+                    None => continue
+                };
+
+                writeln(format!("\r\x1b[K{nick} connected to the server."))?;
+            } else if request.starts_with("GOODBYE ") {
+                let mut request_words = request.split(' ');
+
+                let nick = match request_words.nth(1) {
+                    Some(s) => s,
+                    None => continue
+                };
+
+                let msg = match request_words.next() {
+                    Some(s) if s != "" => {
+                        format!("\r\x1b[K{nick} disconnected with message: {s}.")
+                    },
+                    None|Some(_) => { 
+                        format!("\r\x1b[K{nick} disconnected from the server.")
+                    }
+                };
+
+                writeln(msg)?;
+
+            }
+
+            // print prompt again
+            print!("{}> ", client_nick);
+            stdout().flush()?;
+
+            // get the message the user was typing
+            loop {
+                match rx.try_recv() {
+                    Ok(s) => message = s,
+                    Err(_) => break
+                }
+            };
+
+            // print the message the user was typing
+            print!("{}", message);
+            stdout().flush()?;
+        }
+    }
 }
