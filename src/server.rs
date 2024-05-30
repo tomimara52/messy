@@ -87,47 +87,65 @@ impl Server {
         addr: SocketAddr
     ) -> Result<(), ServerError> {
         if request.starts_with("CONNECT ") {
-            let nick = match request.split(' ').nth(1) {
-                Some(s) => s,
-                None => return Err(ServerError::InvalidRequest)
-            };
-            
-            let stream = match stream.try_clone() {
-                Ok(s) => s,
-                Err(_) => return Err(ServerError::ClientDisconnected)
-            };
-
-            self.clients.push(Client::from_stream(nick, stream));
-
-            self.announce_connected(nick);
-
-            println!("{nick} connected.");
+            self.connect_handler(request, stream, addr)?;
         } else if request.starts_with("SEND ") {
-            if request.len() < 6 {
-                return Err(ServerError::InvalidRequest);
-            }
-            
-            let msg = &request[5..];
-
-            self.send_client_message(addr, msg);
+            self.send_handler(request, stream, addr)?;
         } else if request.starts_with("DISCONNECT") {
-            let pos = match self.client_index(addr) {
-                Some(i) => i,
-                None => return Ok(())
-            };
-
-            let mut msg = "";
-
-            if request.len() > 11 {
-                msg = &request[11..];
-            }
-
-            self.announce_disconnected(pos, msg);
-
-            self.clients.remove(pos);
+            self.disconnect_handler(request, stream, addr)?;
         } else {
             return Err(ServerError::InvalidRequest);
         }
+
+        Ok(())
+    }
+
+    fn connect_handler(&mut self, request: &str, stream: TcpStream, _: SocketAddr) -> Result<(), ServerError> {
+        //let nick = captures[1].trim();
+        let nick = match request.split(' ').nth(1) {
+            Some(s) => s,
+            None => return Err(ServerError::InvalidRequest)
+        };
+
+        let stream = match stream.try_clone() {
+            Ok(s) => s,
+            Err(_) => return Err(ServerError::ClientDisconnected)
+        };
+
+        self.clients.push(Client::from_stream(nick, stream));
+
+        self.announce_connected(nick);
+
+        println!("{nick} connected.");
+        Ok(())
+    }
+
+    fn send_handler(&mut self, request: &str, _: TcpStream, addr: SocketAddr) -> Result<(), ServerError> {
+        if request.len() < 6 {
+            return Err(ServerError::InvalidRequest);
+        }
+
+        let msg = &request[5..];
+
+        self.send_client_message(addr, msg);
+
+        Ok(())
+    }
+
+    fn disconnect_handler(&mut self, request: &str, _:TcpStream, addr: SocketAddr) -> Result<(), ServerError> {
+        let pos = match self.client_index(addr) {
+            Some(i) => i,
+            None => return Ok(())
+        };
+
+        let mut msg = "";
+
+        if request.len() > 11 {
+            msg = &request[11..];
+        }
+
+        self.announce_disconnected(pos, msg);
+
+        self.clients.remove(pos);
 
         Ok(())
     }
