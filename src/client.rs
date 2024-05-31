@@ -190,16 +190,6 @@ fn listen_function(
                         format!("\r\x1b[K{nick} disconnected with message: {s}.")
                     }
                 };
-                /*
-                let msg = match request_words.next() {
-                    Some(s) if s != "" => {
-                        format!("\r\x1b[K{nick} disconnected with message: {s}.")
-                    },
-                    None|Some(_) => { 
-                        format!("\r\x1b[K{nick} disconnected from the server.")
-                    }
-                };
-                */
 
                 writeln(msg)?;
 
