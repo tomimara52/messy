@@ -182,6 +182,15 @@ fn listen_function(
                     None => continue
                 };
 
+                let msg = match request_words.fold(String::new(), |a, e| { a + " " + e }).trim() {
+                    "" => { 
+                        format!("\r\x1b[K{nick} disconnected from the server.")
+                    },
+                    s => {
+                        format!("\r\x1b[K{nick} disconnected with message: {s}.")
+                    }
+                };
+                /*
                 let msg = match request_words.next() {
                     Some(s) if s != "" => {
                         format!("\r\x1b[K{nick} disconnected with message: {s}.")
@@ -190,6 +199,7 @@ fn listen_function(
                         format!("\r\x1b[K{nick} disconnected from the server.")
                     }
                 };
+                */
 
                 writeln(msg)?;
 
