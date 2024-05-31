@@ -3,16 +3,24 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::Instant;
+use regex::{Captures, Regex};
 
 use crate::Client;
 
 const MAX_INACTIVITY: u64 = 300;
 
+enum Command {
+    Connect,
+    Send,
+    Disconnect,
+}
+
 pub struct Server {
     listener: Option<Listener>,
     receiver: Receiver<ChannelPacket>,
     clients: Vec<Client>,
-    last_check: Instant
+    last_check: Instant,
+    commands: Vec<(Regex, Command)>,
 }
 
 impl Server {
@@ -21,11 +29,18 @@ impl Server {
         let (sender, receiver) = mpsc::channel();
         let listener = Some(Listener { listener, sender });
 
+        let commands = vec![
+            (Regex::new(r"^CONNECT\s+(\w+)$").unwrap(), Command::Connect),
+            (Regex::new(r"^SEND\s+([\S|\s]+)$").unwrap(), Command::Send),
+            (Regex::new(r"^DISCONNECT(\s[\w|\s]*)?$").unwrap(), Command::Disconnect),
+        ];
+
         Server {
             listener,
             receiver,
             clients: vec![],
-            last_check: Instant::now()
+            last_check: Instant::now(),
+            commands
         }
     }
 
@@ -86,25 +101,21 @@ impl Server {
         stream: TcpStream,
         addr: SocketAddr
     ) -> Result<(), ServerError> {
-        if request.starts_with("CONNECT ") {
-            self.connect_handler(request, stream, addr)?;
-        } else if request.starts_with("SEND ") {
-            self.send_handler(request, stream, addr)?;
-        } else if request.starts_with("DISCONNECT") {
-            self.disconnect_handler(request, stream, addr)?;
-        } else {
-            return Err(ServerError::InvalidRequest);
+        for (r, c) in &self.commands {
+            if let Some(captures) = r.captures(request) {
+                return match c {
+                    Command::Connect => { self.connect_handler(captures, stream, addr) },
+                    Command::Send => { self.send_handler(captures, stream, addr) },
+                    Command::Disconnect => { self.disconnect_handler(captures, stream, addr) },
+                }
+            }
         }
 
-        Ok(())
+        Err(ServerError::InvalidRequest)
     }
 
-    fn connect_handler(&mut self, request: &str, stream: TcpStream, _: SocketAddr) -> Result<(), ServerError> {
-        //let nick = captures[1].trim();
-        let nick = match request.split(' ').nth(1) {
-            Some(s) => s,
-            None => return Err(ServerError::InvalidRequest)
-        };
+    fn connect_handler(&mut self, captures: Captures, stream: TcpStream, _: SocketAddr) -> Result<(), ServerError> {
+        let nick = captures[1].trim();
 
         let stream = match stream.try_clone() {
             Ok(s) => s,
@@ -119,19 +130,15 @@ impl Server {
         Ok(())
     }
 
-    fn send_handler(&mut self, request: &str, _: TcpStream, addr: SocketAddr) -> Result<(), ServerError> {
-        if request.len() < 6 {
-            return Err(ServerError::InvalidRequest);
-        }
-
-        let msg = &request[5..];
+    fn send_handler(&mut self, captures: Captures, _: TcpStream, addr: SocketAddr) -> Result<(), ServerError> {
+        let msg = captures[1].trim();
 
         self.send_client_message(addr, msg);
 
         Ok(())
     }
 
-    fn disconnect_handler(&mut self, request: &str, _:TcpStream, addr: SocketAddr) -> Result<(), ServerError> {
+    fn disconnect_handler(&mut self, captures: Captures, _:TcpStream, addr: SocketAddr) -> Result<(), ServerError> {
         let pos = match self.client_index(addr) {
             Some(i) => i,
             None => return Ok(())
@@ -139,8 +146,8 @@ impl Server {
 
         let mut msg = "";
 
-        if request.len() > 11 {
-            msg = &request[11..];
+        if let Some(e) = captures.get(1) {
+            msg = e.as_str().trim();
         }
 
         self.announce_disconnected(pos, msg);
