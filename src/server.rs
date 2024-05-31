@@ -266,14 +266,6 @@ impl Listener {
 
                     sender.send(packet).unwrap();
                 }
-
-                let packet = ChannelPacket {
-                    request: String::from("DISCONNECT"),
-                    stream,
-                    addr
-                };
-
-                sender.send(packet).ok();
             });
         }
     }
