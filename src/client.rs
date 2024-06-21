@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::io::{self, stdin, stdout, BufRead, BufReader, Read, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::TcpStream;
 use std::thread;
 use crossterm::terminal::{enable_raw_mode, disable_raw_mode, is_raw_mode_enabled};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -9,23 +9,14 @@ use std::sync::mpsc::{self, Receiver, Sender};
 pub struct Client {
     stream: TcpStream,
     nick: String,
-    addr: SocketAddr
 }
 
 impl Client {
     pub fn new(addr: &str, nick: &str) -> Client {
         let stream = TcpStream::connect(addr).expect("Host not found");
         let nick = String::from(nick);
-        let addr = stream.peer_addr().unwrap();
 
-        Client { stream, nick, addr }
-    }
-
-    pub fn from_stream(nick: &str, stream: TcpStream) -> Client {
-        let nick = String::from(nick);
-        let addr = stream.peer_addr().unwrap();
-
-        Client { stream, nick, addr }
+        Client { stream, nick }
     }
 
     pub fn connect(&mut self) {
@@ -42,18 +33,6 @@ impl Client {
             println!("Input loop failed with: {e}.");
             std::process::exit(1);
         }
-    }
-
-    pub fn nick(&self) -> &String {
-        &self.nick
-    }
-
-    pub fn write_stream(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
-        self.stream.write(buf)
-    }
-
-    pub fn peer_addr(&self) -> SocketAddr {
-        self.addr
     }
 
     fn input_loop(&mut self, tx: Sender<String>) -> Result<(), Box<dyn Error>> {

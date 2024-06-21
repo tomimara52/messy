@@ -1,13 +1,11 @@
-use std::io::{BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::Instant;
 use regex::{Captures, Regex};
 
-use crate::Client;
-
-const MAX_INACTIVITY: u64 = 300;
+const MAX_INACTIVITY: u64 = 5;
 
 enum Command {
     Connect,
@@ -18,7 +16,7 @@ enum Command {
 pub struct Server {
     listener: Option<Listener>,
     receiver: Receiver<ChannelPacket>,
-    clients: Vec<Client>,
+    clients: Vec<ClientConnection>,
     last_check: Instant,
     commands: Vec<(Regex, Command)>,
 }
@@ -122,7 +120,7 @@ impl Server {
             Err(_) => return Err(ServerError::ClientDisconnected)
         };
 
-        self.clients.push(Client::from_stream(nick, stream));
+        self.clients.push(ClientConnection::new(nick, stream));
 
         self.announce_connected(nick);
 
@@ -158,7 +156,7 @@ impl Server {
     }
 
     fn announce_disconnected(&mut self, index: usize, msg: &str) {
-        let nick = self.clients[index].nick();
+        let nick = &self.clients[index].nick;
 
         let msg = String::from("GOODBYE ") + nick + " " + msg + "\n";
 
@@ -202,7 +200,7 @@ impl Server {
             Some(i) => i,
         };
 
-        let sender_nick = self.clients[sender_index].nick();
+        let sender_nick = &self.clients[sender_index].nick;
 
         let msg = String::from("SENT ") +
             &String::from(sender_nick) + " " + msg + "\n";
@@ -210,7 +208,7 @@ impl Server {
         let mut to_delete = vec![];
 
         for (i, client) in self.clients.iter_mut().enumerate() {
-            if client.peer_addr() == sender_addr {
+            if client.addr == sender_addr {
                 continue;
             }
 
@@ -226,7 +224,7 @@ impl Server {
     }
 
     fn client_index(&self, client_addr: SocketAddr) -> Option<usize> {
-        let same_address = |c: &Client| c.peer_addr() == client_addr;
+        let same_address = |c: &ClientConnection| c.addr == client_addr;
 
         self.clients.iter().position(same_address)
     }
@@ -280,4 +278,23 @@ struct ChannelPacket {
 enum ServerError {
     ClientDisconnected,
     InvalidRequest,
+}
+
+struct ClientConnection {
+    nick: String,
+    stream: TcpStream,
+    addr: SocketAddr
+}
+
+impl ClientConnection {
+    fn new(nick: &str, stream: TcpStream) -> ClientConnection {
+        let addr = stream.peer_addr().unwrap();
+        let nick = String::from(nick);
+
+        ClientConnection{ nick, stream, addr }
+    }
+
+    fn write_stream(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
+        self.stream.write(buf)
+    }
 }
